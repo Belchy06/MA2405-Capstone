@@ -2,12 +2,17 @@ library(dplyr)
 library(reshape2)
 library(ggplot2)
 library(faraway)
+library(tidyverse)
 
 importedData <- read.csv(file = "diabetes.csv")
 
 sapply(importedData, function(x) sum(is.na(x)))
 
 summary(importedData)
+
+cleanData <- importedData %>%
+  rowwise() %>%
+  filter(sum(c(Glucose, BloodPressure, SkinThickness, Insulin, BMI)) != 0)
 
 cleanData <- filter(importedData, Glucose > 0, BloodPressure > 0, SkinThickness > 0, Insulin > 0, BMI > 0)
 
