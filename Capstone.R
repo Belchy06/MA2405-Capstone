@@ -6,6 +6,8 @@ library(tidyverse)
 library(bestglm)
 library(caret)
 library(rFSA)
+library(regclass)
+library(cowplot)
 
 rm(list = ls())
 importedData <- read.csv(file = "diabetes.csv")
@@ -39,6 +41,12 @@ ggplot(ccm, aes(x = variable, y = Vars)) +
   labs(x= "", y = "", fill = "Pearson's Correlation") + 
   scale_x_discrete(position = "top") +
   scale_y_discrete(limits = rev(levels(ccm$Vars))) 
+
+
+
+
+
+
 
 
 
@@ -146,10 +154,41 @@ LR.test.acc
 LR.test.spec
 LR.test.sens
 
+LR.prob <- predict(LR.model, newdata = cleanData, type = "response")
+plotData <- cbind(cleanData, LR.prob)
+plotData$AgeGroup <- cut(plotData$Age, breaks=c(20,25,40,55,70), right = FALSE)
+plotData$logAge <- log(plotData$Age)
+plotData$GlucoseGroup <- cut(plotData$Glucose, breaks=c(50,80,105,185,200), right = FALSE)
+plotData <- plotData[complete.cases(plotData), ]
 
+par(mfrow = c(1,2))
+fixedage <- ggplot(data = plotData) +
+  aes(x = Glucose, colour = AgeGroup, group = AgeGroup, y = LR.prob) +
+  geom_point() +
+  stat_smooth(method = "glm", se = FALSE, method.args = list(family=binomial)) +
+  ylab("Probability of GDM") +
+  xlab("Glucose (mg/dL)") +
+  scale_color_manual(name="Age",
+                     labels=c("<25","25-39","40-54", "55-70"),
+                     values=c("red","green","blue","purple")) +
+  ggtitle("Glucose vs Fixed Age") +
+  theme(plot.title = element_text(lineheight=2, hjust=0.5, size = 15))
 
+fixedglucose <- ggplot(data = plotData) +
+  aes(x = Age, colour = GlucoseGroup, group = GlucoseGroup, y = LR.prob) +
+  geom_point() +
+  stat_smooth(method = "glm", se = FALSE, method.args = list(family=binomial)) +
+  ylab("Probability of GDM") +
+  xlab("Age (years)") +
+  ggtitle("Age vs Fixed Glucose") +
+  theme(plot.title = element_text(lineheight=2, hjust=0.5, size = 15)) +
+  scale_color_manual(name="Glucose",
+                     labels=c("<50","50-79","80-104", "104-184"),
+                     values=c("red","green","blue","purple"))
+  
+plot_grid(fixedage, fixedglucose, labels="")
 # ROC
-vif(LR.model)
+vif(cleanData)
 
 
 
