@@ -8,6 +8,7 @@ library(caret)
 library(rFSA)
 library(regclass)
 library(cowplot)
+library(pROC)
 
 rm(list = ls())
 importedData <- read.csv(file = "diabetes.csv")
@@ -43,13 +44,6 @@ ggplot(ccm, aes(x = variable, y = Vars)) +
   scale_y_discrete(limits = rev(levels(ccm$Vars))) 
 
 
-
-
-
-
-
-
-
 ###############################
 # CV Data
 ###############################
@@ -64,22 +58,6 @@ nFolds <- 5
 folds <- createFolds(trainDat$Outcome, k = nFolds)
 
 
-
-########################
-# Model Creation
-########################
-LR.logit <- glm(Outcome ~ ., family = binomial("logit"), data=trainDat)
-summary(LR.logit)
-vif(LR.logit)
-
-LR.probit <- glm(Outcome ~ ., family = binomial("probit"), data=trainDat)
-summary(LR.probit)
-
-
-LR.cloglog <- glm(Outcome ~ ., family = binomial("cloglog"), data=trainDat)
-summary(LR.cloglog)
-
-
 ########################
 # Best subset selection
 ########################
@@ -87,74 +65,16 @@ best.logit <- bestglm(trainDat, family = binomial("logit"), IC = "AIC", method =
 summary(best.logit$BestModel)
 best.logit$Subsets
 
-x <- glmFSA(Outcome ~ ., data = trainDat, interactions = FALSE, return.models = TRUE)
+
+x <- glmFSA(Outcome ~ ., data = trainDat, interactions = TRUE, return.models = TRUE)
 x$solutions
 x
 
-M1 <- glm(Outcome ~ . + Pregnancies * Age, family = binomial("logit"), data=trainDat)
-summary(M1)
-
-M2 <- glm(Outcome ~ ., family = binomial("logit"), data=trainDat)
-summary(M2)
-
-M3 <- glm(Outcome ~ ., family = binomial("logit"), data=trainDat)
-summary(M3)
-
-M4 <- glm(Outcome ~ ., family = binomial("logit"), data=trainDat)
-summary(M4)
-
-
-
-best.probit <- bestglm(trainDat, family = binomial("probit"), IC = "AIC", method = "exhaustive")
-summary(best.probit$BestModel)
-best.probit$Subsets
-
-best.cloglog <- bestglm(trainDat, family = binomial("cloglog"), IC = "AIC", method = "exhaustive")
-summary(best.cloglog$BestModel)
-best.cloglog$Subsets
-
-# Logit with 4 predictors (Glucose + BMI + PedigreeFunction + Age) has the lowest AIC of 291.77
+# Logit with 5 predictors (Pregnancies,   Glucose + BMI + PedigreeFunction + Age) has the lowest AIC of 291.77
 ########################
-# 5 Fold Cross Validation
+# 5 Interactions
 ########################
-train.acc <- c()
-test.acc <- c()
-train.acc.temp <- c()
-test.acc.temp <- c()
-for(i in 1:nFolds) {
-  LR.model <- glm(Outcome ~ Glucose + BMI + DiabetesPedigreeFunction + Age, family = binomial("logit"), trainDat[-folds[[i]], ], control = list(maxit = 50))
-  trainPred <- predict(LR.model, newdata = trainDat[-folds[[i]], ], type = "response")
-  LR.pred <- rep(0, dim(trainDat[-folds[[i]], ])[1])
-  LR.pred[trainPred > .5] <- 1
-  trainTable <- table(LR.pred, trainDat[-folds[[i]], ]$Outcome)
-  
-  
-  testPred <- predict(LR.model, newdata = trainDat[folds[[i]], ], type = "response")
-  LR.pred <- rep(0, dim(trainDat[folds[[i]], ])[1])
-  LR.pred[testPred > .5] <- 1
-  testTable <- table(LR.pred, trainDat[folds[[i]], ]$Outcome)
-  
-  train.acc.temp <- c(train.acc.temp, (trainTable[1,1]+trainTable[2,2])/sum(trainTable))
-  test.acc.temp <- c(test.acc.temp, (testTable[1,1]+testTable[2,2])/sum(testTable))
-}
-train.acc <- rbind(train.acc, train.acc.temp)
-test.acc <- rbind(test.acc, test.acc.temp)
-rowMeans(train.acc)
-rowMeans(test.acc)
-
-LR.model <- glm(Outcome ~ Glucose + BMI + DiabetesPedigreeFunction + Age, family = binomial("logit"), trainDat, control = list(maxit = 50))
-LR.prob <- predict(LR.model, newdata = testDat, type = "response")
-LR.pred <- rep(0, dim(testDat)[1])
-LR.pred[LR.prob > .5] <- 1
-LR.test.table <- table(LR.pred, testDat$Outcome)
-LR.test.acc <- (LR.test.table[1,1]+LR.test.table[2,2])/sum(LR.test.table)
-LR.test.spec <- LR.test.table[1,1]/(LR.test.table[1,1] + LR.test.table[2,2])
-LR.test.sens <- LR.test.table[1,1]/(LR.test.table[1,1] + LR.test.table[2,1])
-LR.test.acc
-LR.test.spec
-LR.test.sens
-
-LR.prob <- predict(LR.model, newdata = cleanData, type = "response")
+LR.prob <- predict(best.logit$BestModel, newdata = cleanData, type = "response")
 plotData <- cbind(cleanData, LR.prob)
 plotData$AgeGroup <- cut(plotData$Age, breaks=c(20,25,40,55,70), right = FALSE)
 plotData$logAge <- log(plotData$Age)
@@ -185,14 +105,59 @@ fixedglucose <- ggplot(data = plotData) +
   scale_color_manual(name="Glucose",
                      labels=c("<50","50-79","80-104", "104-184"),
                      values=c("red","green","blue","purple"))
-  
+
 plot_grid(fixedage, fixedglucose, labels="")
-# ROC
-vif(cleanData)
 
 
+########################
+# ROC on test data
+########################
+par(mfrow = c(1,1))
+LR.model <- glm(Outcome ~ Glucose + BMI + DiabetesPedigreeFunction + Age, family = binomial("logit"), trainDat, control = list(maxit = 50))
+LR.prob <- predict(LR.model, testDat, type = "response")
+g <- roc(Outcome ~ LR.prob, data = testDat)
+plot(g)    
 
 
+########################
+# 5 Fold Cross Validation
+########################
+train.acc <- c()
+test.acc <- c()
+train.acc.temp <- c()
+test.acc.temp <- c()
+for(i in 1:nFolds) {
+  LR.model <- glm(Outcome ~ Glucose + BMI + DiabetesPedigreeFunction + Age, family = binomial("logit"), trainDat[-folds[[i]], ], control = list(maxit = 50))
+  trainPred <- predict(LR.model, trainDat[-folds[[i]], ], type = "response")
+  LR.pred <- rep(0, dim(trainDat[-folds[[i]], ])[1])
+  LR.pred[trainPred > .5] <- 1
+  trainTable <- table(LR.pred, trainDat[-folds[[i]], ]$Outcome)
+  
+  
+  testPred <- predict(LR.model, trainDat[folds[[i]], ], type = "response")
+  LR.pred <- rep(0, dim(trainDat[folds[[i]], ])[1])
+  LR.pred[testPred > .5] <- 1
+  testTable <- table(LR.pred, trainDat[folds[[i]], ]$Outcome)
+  
+  train.acc.temp <- c(train.acc.temp, (trainTable[1,1]+trainTable[2,2])/sum(trainTable))
+  test.acc.temp <- c(test.acc.temp, (testTable[1,1]+testTable[2,2])/sum(testTable))
+}
+train.acc <- rbind(train.acc, train.acc.temp)
+test.acc <- rbind(test.acc, test.acc.temp)
+rowMeans(train.acc)
+rowMeans(test.acc)
 
-residuals(LR.logit, type = "deviance") ## deviance residuals
-plot(residuals(LR.logit) ~ predict(LR.logit, type="link"),xlab=expression(hat(eta)),ylab="Deviance residuals",pch=20,col="blue")
+########################
+# Test accuracy
+########################
+LR.model <- glm(Outcome ~ Glucose + BMI + DiabetesPedigreeFunction + Age, family = binomial("logit"), trainDat, control = list(maxit = 50))
+LR.prob <- predict(LR.model, testDat, type = "response")
+LR.pred <- rep(0, dim(testDat)[1])
+LR.pred[LR.prob > .5] <- 1
+LR.test.table <- table(LR.pred, testDat$Outcome)
+LR.test.acc <- (LR.test.table[1,1]+LR.test.table[2,2])/sum(LR.test.table)
+LR.test.spec <- LR.test.table[1,1]/(LR.test.table[1,1] + LR.test.table[2,2])
+LR.test.sens <- LR.test.table[1,1]/(LR.test.table[1,1] + LR.test.table[2,1])
+LR.test.acc
+LR.test.spec
+LR.test.sens
