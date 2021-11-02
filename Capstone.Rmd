@@ -1,3 +1,15 @@
+---
+title: "Appendix B - R Code"
+output: pdf_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(results = FALSE)
+```
+
+```{r, echo=TRUE, fig.keep='none'}
 library(dplyr)
 library(reshape2)
 library(ggplot2)
@@ -162,3 +174,5 @@ LR.test.acc
 LR.test.spec
 LR.test.sens
 
+
+```
